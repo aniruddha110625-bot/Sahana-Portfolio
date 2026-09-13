@@ -23,15 +23,18 @@ const currentFrame = index => (
     `video_frames_24fps_png/frame_${index.toString().padStart(6, '0')}.png`
 );
 
+const images = [];
+
 const preloadImages = () => {
     for (let i = 1; i <= frameCount; i++) {
         const img = new Image();
         img.src = currentFrame(i);
+        images.push(img);
     }
 };
 
-const img = new Image();
-img.src = currentFrame(1);
+// Preload images immediately
+preloadImages();
 
 // Set initial canvas dimensions
 canvas.width = window.innerWidth;
@@ -39,7 +42,7 @@ canvas.height = window.innerHeight;
 
 // Function to draw image with "object-fit: cover" behavior on canvas
 function drawImageProp(ctx, img) {
-    if(!img.width || !img.height) return;
+    if(!img || !img.width || !img.height) return;
     
     let w = ctx.canvas.width;
     let h = ctx.canvas.height;
@@ -59,13 +62,19 @@ function drawImageProp(ctx, img) {
     ctx.drawImage(img, cx, cy, nw, nh);
 }
 
-img.onload = function() {
-    drawImageProp(context, img);
-};
+// Ensure the first image draws once it's loaded
+if (images[0].complete) {
+    drawImageProp(context, images[0]);
+} else {
+    images[0].onload = () => drawImageProp(context, images[0]);
+}
 
 const updateImage = index => {
-    img.src = currentFrame(index);
-    drawImageProp(context, img);
+    // index is 1-based in the scroll math, so we subtract 1 for the array
+    const imgToDraw = images[index - 1];
+    if (imgToDraw && imgToDraw.complete) {
+        drawImageProp(context, imgToDraw);
+    }
 };
 
 // Handle Scroll Event
@@ -82,12 +91,23 @@ window.addEventListener('scroll', () => {
     requestAnimationFrame(() => updateImage(frameIndex + 1));
 });
 
-// Preload to ensure smooth scrolling
-preloadImages();
-
 // Resize Event for Canvas
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    drawImageProp(context, img);
+    
+    // Draw the currently active frame
+    const scrollTop = document.documentElement.scrollTop;
+    const maxScrollTop = document.documentElement.scrollHeight - window.innerHeight;
+    let scrollFraction = maxScrollTop > 0 ? scrollTop / maxScrollTop : 0;
+    
+    const frameIndex = Math.min(
+        frameCount - 1,
+        Math.floor(scrollFraction * frameCount)
+    );
+    
+    const imgToDraw = images[frameIndex];
+    if (imgToDraw && imgToDraw.complete) {
+        drawImageProp(context, imgToDraw);
+    }
 });
